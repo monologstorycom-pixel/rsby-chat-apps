@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RSBY Telegram Chat</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="login-screen" class="screen">
+        <div class="login-card">
+            <div class="logo-circle">RS</div>
+            <h2>RSBY Chat</h2>
+            <p>Ephemeral N-to-N Chat</p>
+            <input type="text" id="username-input" placeholder="Masukkan nama..." maxlength="15">
+            <button id="btn-join">LANJUTKAN</button>
+        </div>
+    </div>
+
+    <div id="chat-screen" class="screen hidden">
+        <aside id="sidebar">
+            <header class="sidebar-header">
+                <div class="header-top">
+                    <span class="menu-btn">☰</span>
+                    <h3>RSBY Chat</h3>
+                </div>
+            </header>
+            <ul id="user-list"></ul>
+        </aside>
+
+        <main id="chat-area">
+            <header class="chat-header">
+                <button id="btn-back">←</button>
+                <div class="header-info">
+                    <h4 id="target-name">Lobby Group</h4>
+                    <span id="typing-status"></span>
+                </div>
+            </header>
+
+            <div id="messages-container">
+                <div id="messages"></div>
+            </div>
+
+            <div id="reply-preview" class="hidden">
+                <div class="reply-line"></div>
+                <div class="reply-content">
+                    <strong id="reply-name"></strong>
+                    <p id="reply-text"></p>
+                </div>
+                <button id="btn-cancel-reply">✕</button>
+            </div>
+
+            <footer id="input-bar">
+                <div class="bar-inner">
+                    <label for="file-input" class="icon-btn">📎</label>
+                    <input type="file" id="file-input" accept="image/*" hidden>
+                    <input type="text" id="message-input" placeholder="Tulis pesan..." autocomplete="off">
+                    <button id="btn-send">➤</button>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

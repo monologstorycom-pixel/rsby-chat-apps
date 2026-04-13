@@ -1,0 +1,15 @@
+{
+  "name": "RSBY Chat Telegram",
+  "short_name": "RSBY Chat",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e5ddd5",
+  "theme_color": "#0088cc",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2111/2111646.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
