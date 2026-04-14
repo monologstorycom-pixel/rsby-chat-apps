@@ -13,7 +13,6 @@ let replyingTo = null;
 let typingTimer = null;
 let isTyping = false;
 
-// --- EMOJI LIST ---
 const EMOJIS = [
     '😀','😂','🤣','😍','🥰','😎','🤔','😅','😭','😱',
     '👍','👎','❤️','🔥','✨','🎉','👏','🙏','💪','😏',
@@ -21,7 +20,58 @@ const EMOJIS = [
     '🐶','🐱','🍕','🍔','☕','🎮','🏆','💯','✅','❌'
 ];
 
-// --- SESSION & PWA ---
+// =====================================================
+// PUSH NOTIFICATION SETUP
+// =====================================================
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function setupPushNotification(socketId) {
+    try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+        const reg = await navigator.serviceWorker.ready;
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        // Ambil VAPID public key dari server
+        const res = await fetch('/vapid-public-key');
+        const { key } = await res.json();
+
+        if (key.startsWith('GANTI')) {
+            console.warn('VAPID key belum diset, push notif nonaktif');
+            return;
+        }
+
+        // Subscribe push
+        let subscription = await reg.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(key)
+            });
+        }
+
+        // Kirim subscription ke server
+        await fetch('/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ socketId, subscription })
+        });
+
+        console.log('Push notification aktif ✓');
+    } catch (err) {
+        console.warn('Push setup gagal:', err.message);
+    }
+}
+
+// =====================================================
+// SESSION & PWA
+// =====================================================
 window.onload = () => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
@@ -48,15 +98,18 @@ function startApp() {
     socket.emit('join', myName);
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('chat-screen').classList.remove('hidden');
-    if (Notification.permission !== 'granted') Notification.requestPermission();
     buildEmojiPicker();
 }
 
 socket.on('connect', () => {
     mySocketId = socket.id;
+    // Setup push setelah dapat socket id
+    setupPushNotification(socket.id);
 });
 
-// --- EMOJI PICKER ---
+// =====================================================
+// EMOJI PICKER
+// =====================================================
 function buildEmojiPicker() {
     const picker = document.getElementById('emoji-picker');
     picker.innerHTML = '';
@@ -84,7 +137,9 @@ document.addEventListener('click', () => {
 
 document.getElementById('emoji-picker').onclick = (e) => e.stopPropagation();
 
-// --- REPLY LOGIC ---
+// =====================================================
+// REPLY
+// =====================================================
 function setReply(sender, content) {
     replyingTo = { sender, content };
     document.getElementById('reply-name').innerText = sender;
@@ -98,7 +153,9 @@ document.getElementById('btn-cancel-reply').onclick = () => {
     replyPreview.classList.add('hidden');
 };
 
-// --- NAVIGATION ---
+// =====================================================
+// NAVIGATION
+// =====================================================
 socket.on('update users', (users) => {
     const list = document.getElementById('user-list');
     list.innerHTML = `<li class="user-item ${currentTarget === 'lobby' ? 'active' : ''}" onclick="switchChat('lobby', 'Lobby Group')">
@@ -127,7 +184,9 @@ window.switchChat = (id, name) => {
 
 document.getElementById('btn-back').onclick = () => body.classList.remove('chat-open');
 
-// --- TYPING INDICATOR ---
+// =====================================================
+// TYPING INDICATOR
+// =====================================================
 messageInput.addEventListener('input', () => {
     if (!isTyping) {
         isTyping = true;
@@ -152,7 +211,9 @@ socket.on('user stop typing', ({ to }) => {
     }
 });
 
-// --- MESSAGING ---
+// =====================================================
+// SEND MESSAGE
+// =====================================================
 function send() {
     const val = messageInput.value.trim();
     if (!val) return;
@@ -161,14 +222,13 @@ function send() {
     clearTimeout(typingTimer);
     socket.emit('stop typing', { to: currentTarget, isPrivate: currentTarget !== 'lobby' });
 
-    const payload = {
+    socket.emit('send message', {
         type: 'text',
         content: val,
         replyTo: replyingTo,
         isPrivate: currentTarget !== 'lobby',
         to: currentTarget
-    };
-    socket.emit('send message', payload);
+    });
     messageInput.value = "";
     replyingTo = null;
     replyPreview.classList.add('hidden');
@@ -191,12 +251,13 @@ fileInput.onchange = (e) => {
     fileInput.value = '';
 };
 
-// --- RECEIVE ---
+// =====================================================
+// RECEIVE MESSAGE
+// =====================================================
 socket.on('load history', (history) => {
     if (currentTarget === 'lobby') {
         messagesContainer.innerHTML = "";
         history.forEach(m => appendMsg(m));
-        // Mark semua pesan yang belum terbaca
         history.forEach(m => {
             if (m.sender !== myName && !m.readBy?.includes(socket.id)) {
                 socket.emit('mark read', { msgId: m.id, fromSocketId: m.fromSocketId });
@@ -206,13 +267,13 @@ socket.on('load history', (history) => {
 });
 
 socket.on('receive message', (msg) => {
-    if (msg.sender !== myName && document.visibilityState === 'hidden' && Notification.permission === 'granted') {
-        new Notification(`Pesan dari ${msg.sender}`, { body: msg.type === 'text' ? msg.content : '📷 Foto' });
+    // Notif in-app (fallback kalau tab aktif)
+    if (msg.sender !== myName && document.visibilityState === 'hidden') {
+        // Push sudah ditangani server, skip Notification API supaya tidak dobel
     }
 
     if (currentTarget === 'lobby' && !msg.isPrivate) {
         appendMsg(msg);
-        // Kalau bukan pesan sendiri, langsung mark read
         if (msg.sender !== myName) {
             socket.emit('mark read', { msgId: msg.id, fromSocketId: msg.fromSocketId });
         }
@@ -224,7 +285,6 @@ socket.on('receive message', (msg) => {
     }
 });
 
-// Update centang ketika pesan terbaca
 socket.on('message read', ({ msgId }) => {
     const el = document.querySelector(`.message[data-id="${msgId}"] .read-receipt`);
     if (el) {
@@ -233,7 +293,9 @@ socket.on('message read', ({ msgId }) => {
     }
 });
 
-// --- APPEND MSG ---
+// =====================================================
+// RENDER MESSAGE
+// =====================================================
 function appendMsg(msg) {
     const isMe = msg.sender === myName;
     const div = document.createElement('div');

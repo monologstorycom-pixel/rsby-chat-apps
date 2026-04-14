@@ -20,6 +20,7 @@
   "homepage": "https://github.com/monologstorycom-pixel/rsby-chat-apps#readme",
   "dependencies": {
     "express": "^5.2.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "web-push": "^3.6.7"
   }
 }
