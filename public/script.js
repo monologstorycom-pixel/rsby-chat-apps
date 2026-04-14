@@ -294,6 +294,44 @@ socket.on('message read', ({ msgId }) => {
 });
 
 // =====================================================
+// LIGHTBOX
+// =====================================================
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+
+window.openLightbox = (src) => {
+    lightboxImg.src = src;
+    lightbox.classList.add('show');
+};
+
+document.getElementById('lightbox-close').onclick = () => {
+    lightbox.classList.remove('show');
+    lightboxImg.src = '';
+};
+
+lightbox.onclick = (e) => {
+    if (e.target === lightbox) {
+        lightbox.classList.remove('show');
+        lightboxImg.src = '';
+    }
+};
+
+document.getElementById('lightbox-download').onclick = () => {
+    const a = document.createElement('a');
+    a.href = lightboxImg.src;
+    a.download = 'foto-rsby-' + Date.now() + '.jpg';
+    a.click();
+};
+
+// Tutup lightbox dengan tombol back HP
+window.addEventListener('popstate', () => {
+    if (lightbox.classList.contains('show')) {
+        lightbox.classList.remove('show');
+        lightboxImg.src = '';
+    }
+});
+
+// =====================================================
 // RENDER MESSAGE
 // =====================================================
 function appendMsg(msg) {
@@ -313,7 +351,7 @@ function appendMsg(msg) {
 
     html += msg.type === 'text'
         ? `<p>${escapeHtml(msg.content)}</p>`
-        : `<img src="${msg.content}" class="chat-img" onclick="window.open(this.src)">`;
+        : `<img src="${msg.content}" class="chat-img" onclick="event.stopPropagation(); openLightbox(this.src)">`;
 
     if (isMe) {
         const isRead = msg.readBy && msg.readBy.length > 1;

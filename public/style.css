@@ -111,6 +111,47 @@ body, html { margin: 0; padding: 0; height: 100dvh; width: 100%; overflow: hidde
 #message-input { flex: 1; border: none; outline: none; font-size: 16px; padding: 5px 0; }
 .icon-btn, #btn-send { background: none; border: none; cursor: pointer; font-size: 20px; padding: 0; }
 
+/* LIGHTBOX */
+#lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+#lightbox.show { display: flex; }
+#lightbox img {
+    max-width: 92vw;
+    max-height: 82vh;
+    border-radius: 8px;
+    object-fit: contain;
+}
+#lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 32px;
+    cursor: pointer;
+    line-height: 1;
+}
+#lightbox-download {
+    margin-top: 14px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-size: 14px;
+}
+#lightbox-download:hover { background: rgba(255,255,255,0.25); }
+
 /* MOBILE RESPONSIVE */
 @media (max-width: 768px) {
     #sidebar { width: 100%; position: absolute; height: 100%; z-index: 5; }
