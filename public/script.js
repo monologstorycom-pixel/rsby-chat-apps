@@ -99,6 +99,7 @@ function startApp() {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('chat-screen').classList.remove('hidden');
     buildEmojiPicker();
+    buildStickerPicker();
 }
 
 socket.on('connect', () => {
@@ -128,14 +129,78 @@ function buildEmojiPicker() {
 
 document.getElementById('btn-emoji').onclick = (e) => {
     e.stopPropagation();
+    document.getElementById('sticker-picker').classList.add('hidden');
     document.getElementById('emoji-picker').classList.toggle('hidden');
 };
 
 document.addEventListener('click', () => {
     document.getElementById('emoji-picker').classList.add('hidden');
+    document.getElementById('sticker-picker').classList.add('hidden');
 });
 
 document.getElementById('emoji-picker').onclick = (e) => e.stopPropagation();
+
+// =====================================================
+// STICKER PICKER
+// =====================================================
+function buildStickerPicker() {
+    const tabs = document.getElementById('sticker-tabs');
+    const grid = document.getElementById('sticker-grid');
+    const packNames = Object.keys(STICKERS);
+
+    tabs.innerHTML = '';
+    packNames.forEach((pack, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'sticker-tab' + (i === 0 ? ' active' : '');
+        btn.textContent = pack;
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.sticker-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            renderStickerGrid(pack);
+        };
+        tabs.appendChild(btn);
+    });
+
+    renderStickerGrid(packNames[0]);
+}
+
+function renderStickerGrid(pack) {
+    const grid = document.getElementById('sticker-grid');
+    grid.innerHTML = '';
+    STICKERS[pack].forEach(url => {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'sticker-item';
+        img.loading = 'lazy';
+        img.onclick = (e) => {
+            e.stopPropagation();
+            sendSticker(url);
+            document.getElementById('sticker-picker').classList.add('hidden');
+        };
+        grid.appendChild(img);
+    });
+}
+
+document.getElementById('btn-sticker').onclick = (e) => {
+    e.stopPropagation();
+    document.getElementById('emoji-picker').classList.add('hidden');
+    document.getElementById('sticker-picker').classList.toggle('hidden');
+};
+
+document.getElementById('sticker-picker').onclick = (e) => e.stopPropagation();
+
+function sendSticker(url) {
+    socket.emit('send message', {
+        type: 'sticker',
+        content: url,
+        replyTo: replyingTo,
+        isPrivate: currentTarget !== 'lobby',
+        to: currentTarget
+    });
+    replyingTo = null;
+    replyPreview.classList.add('hidden');
+}
 
 // =====================================================
 // REPLY
@@ -293,6 +358,49 @@ socket.on('message read', ({ msgId }) => {
     }
 });
 
+const STICKERS = {
+    '🐱 Kucing': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-face_1f431.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/crying-cat_1f63f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-with-tears-of-joy_1f639.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-cat-with-heart-eyes_1f63b.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/pouting-cat_1f63e.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/weary-cat_1f640.gif',
+    ],
+    '😂 Ngakak': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/rolling-on-the-floor-laughing_1f923.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/face-with-tears-of-joy_1f602.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-open-mouth_1f603.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/beaming-face-with-smiling-eyes_1f601.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/winking-face_1f609.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/squinting-face-with-tongue_1f61d.gif',
+    ],
+    '❤️ Cinta': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/red-heart_2764-fe0f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/sparkling-heart_1f496.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/heart-with-arrow_1f498.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/growing-heart_1f497.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/revolving-hearts_1f49e.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-hearts_1f970.gif',
+    ],
+    '👋 Salam': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/waving-hand_1f44b.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/thumbs-up_1f44d.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/clapping-hands_1f44f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/folded-hands_1f64f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/flexed-biceps_1f4aa.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/ok-hand_1f44c.gif',
+    ],
+    '🔥 Hype': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/fire_1f525.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/party-popper_1f389.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/trophy_1f3c6.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/rocket_1f680.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/star-struck_1f929.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/hundred-points_1f4af.gif',
+    ],
+};
+
 // =====================================================
 // LIGHTBOX
 // =====================================================
@@ -351,6 +459,8 @@ function appendMsg(msg) {
 
     html += msg.type === 'text'
         ? `<p>${escapeHtml(msg.content)}</p>`
+        : msg.type === 'sticker'
+        ? `<img src="${msg.content}" class="sticker-msg" onclick="event.stopPropagation();">`
         : `<img src="${msg.content}" class="chat-img" onclick="event.stopPropagation(); openLightbox(this.src)">`;
 
     if (isMe) {

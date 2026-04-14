@@ -56,11 +56,18 @@
             <!-- Emoji Picker -->
             <div id="emoji-picker" class="hidden"></div>
 
+            <!-- Sticker Picker -->
+            <div id="sticker-picker" class="hidden">
+                <div id="sticker-tabs"></div>
+                <div id="sticker-grid"></div>
+            </div>
+
             <footer id="input-bar">
                 <div class="bar-inner">
                     <label for="file-input" class="icon-btn">📎</label>
                     <input type="file" id="file-input" accept="image/*" hidden>
                     <button id="btn-emoji" class="icon-btn">😊</button>
+                    <button id="btn-sticker" class="icon-btn">🎭</button>
                     <input type="text" id="message-input" placeholder="Tulis pesan..." autocomplete="off">
                     <button id="btn-send">➤</button>
                 </div>

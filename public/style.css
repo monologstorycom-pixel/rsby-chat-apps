@@ -50,6 +50,7 @@ body, html { margin: 0; padding: 0; height: 100dvh; width: 100%; overflow: hidde
 .message.others .bubble { background: #fff; border-bottom-left-radius: 2px; }
 .message.me .bubble { background: var(--tg-me); border-bottom-right-radius: 2px; }
 .bubble small { display: block; font-size: 11px; font-weight: bold; color: var(--tg-blue); margin-bottom: 3px; }
+.sticker-msg { width: 120px; height: 120px; object-fit: contain; display: block; }
 .chat-img { max-width: 100%; border-radius: 8px; margin-top: 5px; }
 
 /* REPLY QUOTE */
@@ -105,7 +106,67 @@ body, html { margin: 0; padding: 0; height: 100dvh; width: 100%; overflow: hidde
 }
 .emoji-btn:hover { background: #f0f0f0; }
 
-/* INPUT BAR */
+/* STICKER PICKER */
+#sticker-picker {
+    position: absolute;
+    bottom: 65px;
+    left: 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    width: 300px;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    z-index: 100;
+    overflow: hidden;
+}
+#sticker-tabs {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid #eee;
+    padding: 6px 8px;
+    gap: 4px;
+    flex-shrink: 0;
+    scrollbar-width: none;
+}
+#sticker-tabs::-webkit-scrollbar { display: none; }
+.sticker-tab {
+    background: none;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+    color: var(--tg-gray);
+    transition: background 0.1s;
+}
+.sticker-tab.active { background: var(--tg-blue); color: #fff; }
+.sticker-tab:hover:not(.active) { background: #f0f0f0; }
+#sticker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+.sticker-item {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 4px;
+    transition: background 0.1s;
+    background: none;
+    border: none;
+}
+.sticker-item:hover { background: #f0f0f0; }
+
+
 #input-bar { background: #fff; padding: 10px 15px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #ddd; }
 .bar-inner { display: flex; align-items: center; gap: 10px; max-width: 800px; margin: 0 auto; }
 #message-input { flex: 1; border: none; outline: none; font-size: 16px; padding: 5px 0; }
@@ -159,4 +220,5 @@ body, html { margin: 0; padding: 0; height: 100dvh; width: 100%; overflow: hidde
     #btn-back { display: block; }
     body.chat-open #chat-area { left: 0; }
     #emoji-picker { width: calc(100vw - 20px); left: 10px; }
+    #sticker-picker { width: calc(100vw - 20px); left: 10px; }
 }
