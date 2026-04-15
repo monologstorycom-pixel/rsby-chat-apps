@@ -4,33 +4,39 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const webpush = require('web-push');
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
+const MSG_TTL_MS = 5 * 60 * 60 * 1000;
 
-// =====================================================
-// VAPID KEYS - Generate sekali pakai dengan command:
-// node -e "const wp=require('web-push'); const k=wp.generateVAPIDKeys(); console.log(JSON.stringify(k,null,2))"
-// Lalu isi di sini atau pakai environment variable
-// =====================================================
 const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || 'BFTPQUGMDzZ_5pqdNUJDZtbl_O0q1Qmjy3-unScRa_fleLT5cTOSf6AKzg5nlvWeY788_9UWnfb4pfJrF0eOF-M';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'JEin9EC9Uhfy-N9h644lLFI_A6QJ5-utXexVyq7_8l8';
 
-webpush.setVapidDetails('mailto:admin@rsby.chat', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+try {
+    webpush.setVapidDetails('mailto:admin@rsby.chat', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} catch (e) {
+    console.warn('VAPID setup gagal:', e.message);
+}
 
 let users = {};
-let pushSubscriptions = {}; // socketId -> push subscription
+let pushSubscriptions = {};
 let publicHistory = [];
 
-app.use(express.static('public'));
-app.use(express.json());
+setInterval(() => {
+    const cutoff = Date.now() - MSG_TTL_MS;
+    const before = publicHistory.length;
+    publicHistory = publicHistory.filter(m => new Date(m.timestamp).getTime() > cutoff);
+    const removed = before - publicHistory.length;
+    if (removed > 0) console.log(`Cleared ${removed} expired messages`);
+}, 10 * 60 * 1000);
 
-// Client daftar push subscription
+app.use(express.static('public'));
+app.use(express.json({ limit: '10mb' }));
+
 app.post('/subscribe', (req, res) => {
     const { socketId, subscription } = req.body;
     if (socketId && subscription) pushSubscriptions[socketId] = subscription;
     res.json({ ok: true });
 });
 
-// Kirim VAPID public key ke client
 app.get('/vapid-public-key', (req, res) => {
     res.json({ key: VAPID_PUBLIC_KEY });
 });
@@ -41,35 +47,46 @@ async function pushTo(socketId, payload) {
     try {
         await webpush.sendNotification(sub, JSON.stringify(payload));
     } catch (err) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-            delete pushSubscriptions[socketId];
-        }
+        if (err.statusCode === 410 || err.statusCode === 404) delete pushSubscriptions[socketId];
     }
 }
 
 io.on('connection', (socket) => {
 
     socket.on('join', (username) => {
+        if (!username || typeof username !== 'string') return;
+        username = username.trim().slice(0, 15);
         users[socket.id] = { username, socketId: socket.id };
-        socket.emit('load history', publicHistory);
+        const cutoff = Date.now() - MSG_TTL_MS;
+        const freshHistory = publicHistory.filter(m => new Date(m.timestamp).getTime() > cutoff);
+        socket.emit('load history', freshHistory);
         io.emit('update users', Object.values(users));
-        console.log(`User Join: ${username}`);
+        console.log('[+]', username);
     });
 
     socket.on('send message', async (payload) => {
-        const senderName = users[socket.id]?.username;
+        const senderUser = users[socket.id];
+        if (!senderUser) return;
+        const validTypes = ['text', 'image', 'sticker'];
+        if (!validTypes.includes(payload.type)) return;
+        if (payload.type === 'text' && payload.content.length > 2000) return;
+
         const msg = {
-            id: Date.now(),
-            sender: senderName,
+            id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            sender: senderUser.username,
             fromSocketId: socket.id,
-            ...payload,
-            timestamp: new Date(),
+            type: payload.type,
+            content: payload.content,
+            replyTo: payload.replyTo || null,
+            isPrivate: !!payload.isPrivate,
+            to: payload.to || null,
+            timestamp: new Date().toISOString(),
             readBy: [socket.id]
         };
 
         const notif = {
-            title: `💬 ${senderName}`,
-            body: payload.type === 'text' ? payload.content : '📷 Mengirim foto',
+            title: `💬 ${senderUser.username}`,
+            body: payload.type === 'text' ? payload.content.slice(0, 80) : payload.type === 'sticker' ? '🎭 Mengirim stiker' : '📷 Mengirim foto',
             tag: `msg-${socket.id}`,
             url: '/'
         };
@@ -82,15 +99,13 @@ io.on('connection', (socket) => {
             publicHistory.push(msg);
             io.emit('receive message', msg);
             const targets = Object.keys(users).filter(sid => sid !== socket.id);
-            await Promise.all(targets.map(sid => pushTo(sid, { ...notif, title: `💬 Lobby · ${senderName}` })));
-            setTimeout(() => {
-                publicHistory = publicHistory.filter(m => m.id !== msg.id);
-            }, 24 * 60 * 60 * 1000);
+            await Promise.all(targets.map(sid => pushTo(sid, { ...notif, title: `💬 Lobby · ${senderUser.username}` })));
         }
     });
 
     socket.on('mark read', ({ msgId, fromSocketId }) => {
-        const msg = publicHistory.find(m => m.id === msgId);
+        if (!msgId || !fromSocketId) return;
+        const msg = publicHistory.find(m => m.id == msgId);
         if (msg && !msg.readBy.includes(socket.id)) msg.readBy.push(socket.id);
         socket.to(fromSocketId).emit('message read', { msgId, bySocketId: socket.id });
     });
@@ -108,7 +123,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        if (users[socket.id]) {
+        const user = users[socket.id];
+        if (user) {
+            console.log('[-]', user.username);
             delete users[socket.id];
             delete pushSubscriptions[socket.id];
             io.emit('update users', Object.values(users));
@@ -117,5 +134,5 @@ io.on('connection', (socket) => {
 });
 
 http.listen(PORT, () => {
-    console.log(`RSBY Chat Engine: http://localhost:${PORT}`);
+    console.log(`RSBY Chat: http://localhost:${PORT} | TTL: 5 jam`);
 });

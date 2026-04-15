@@ -20,6 +20,27 @@ const EMOJIS = [
     '🐶','🐱','🍕','🍔','☕','🎮','🏆','💯','✅','❌'
 ];
 
+// Format timestamp -> "HH:MM"
+function formatTime(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d)) return '';
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return h + ':' + m;
+}
+
+// Escape HTML - mencegah XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // =====================================================
 // PUSH NOTIFICATION SETUP
 // =====================================================
@@ -33,21 +54,12 @@ function urlBase64ToUint8Array(base64String) {
 async function setupPushNotification(socketId) {
     try {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
         const reg = await navigator.serviceWorker.ready;
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') return;
-
-        // Ambil VAPID public key dari server
         const res = await fetch('/vapid-public-key');
         const { key } = await res.json();
-
-        if (key.startsWith('GANTI')) {
-            console.warn('VAPID key belum diset, push notif nonaktif');
-            return;
-        }
-
-        // Subscribe push
+        if (!key || key.startsWith('GANTI')) return;
         let subscription = await reg.pushManager.getSubscription();
         if (!subscription) {
             subscription = await reg.pushManager.subscribe({
@@ -55,15 +67,11 @@ async function setupPushNotification(socketId) {
                 applicationServerKey: urlBase64ToUint8Array(key)
             });
         }
-
-        // Kirim subscription ke server
         await fetch('/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ socketId, subscription })
         });
-
-        console.log('Push notification aktif ✓');
     } catch (err) {
         console.warn('Push setup gagal:', err.message);
     }
@@ -74,14 +82,15 @@ async function setupPushNotification(socketId) {
 // =====================================================
 window.onload = () => {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
-
     const saved = localStorage.getItem('rsby_tg_session_v4');
     if (saved) {
-        const session = JSON.parse(saved);
-        if (new Date().getTime() - session.time < 24 * 60 * 60 * 1000) {
-            myName = session.name;
-            startApp();
-        }
+        try {
+            const session = JSON.parse(saved);
+            if (new Date().getTime() - session.time < 24 * 60 * 60 * 1000) {
+                myName = session.name;
+                startApp();
+            }
+        } catch(e) { localStorage.removeItem('rsby_tg_session_v4'); }
     }
 };
 
@@ -104,8 +113,9 @@ function startApp() {
 
 socket.on('connect', () => {
     mySocketId = socket.id;
-    // Setup push setelah dapat socket id
     setupPushNotification(socket.id);
+    // Re-join jika reconnect
+    if (myName) socket.emit('join', myName);
 });
 
 // =====================================================
@@ -143,11 +153,76 @@ document.getElementById('emoji-picker').onclick = (e) => e.stopPropagation();
 // =====================================================
 // STICKER PICKER
 // =====================================================
+const STICKERS = {
+    '🐱 Kucing': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-face_1f431.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/crying-cat_1f63f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-with-tears-of-joy_1f639.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-cat-with-heart-eyes_1f63b.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/pouting-cat_1f63e.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/weary-cat_1f640.gif',
+    ],
+    '😂 Ngakak': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/rolling-on-the-floor-laughing_1f923.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/face-with-tears-of-joy_1f602.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-open-mouth_1f603.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/beaming-face-with-smiling-eyes_1f601.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/winking-face_1f609.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/squinting-face-with-tongue_1f61d.gif',
+    ],
+    '❤️ Cinta': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/red-heart_2764-fe0f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/sparkling-heart_1f496.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/heart-with-arrow_1f498.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/growing-heart_1f497.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/revolving-hearts_1f49e.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-hearts_1f970.gif',
+    ],
+    '👋 Salam': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/waving-hand_1f44b.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/thumbs-up_1f44d.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/clapping-hands_1f44f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/folded-hands_1f64f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/flexed-biceps_1f4aa.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/ok-hand_1f44c.gif',
+    ],
+    '🔥 Hype': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/fire_1f525.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/party-popper_1f389.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/trophy_1f3c6.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/rocket_1f680.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/star-struck_1f929.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/hundred-points_1f4af.gif',
+    ],
+    '😢 Sedih': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/crying-face_1f622.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/loudly-crying-face_1f62d.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/pleading-face_1f97a.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/disappointed-face_1f61e.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/worried-face_1f61f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/pensive-face_1f614.gif',
+    ],
+    '😡 Marah': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/pouting-face_1f621.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/angry-face_1f620.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/face-with-symbols-on-mouth_1f92c.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/hot-face_1f975.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/exploding-head_1f92f.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/skull_1f480.gif',
+    ],
+    '🎵 Musik': [
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/musical-notes_1f3b5.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/microphone_1f3a4.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/headphone_1f3a7.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/guitar_1f3b8.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/drum_1f941.gif',
+        'https://em-content.zobj.net/source/animated-noto-emoji/356/saxophone_1f3b7.gif',
+    ],
+};
+
 function buildStickerPicker() {
     const tabs = document.getElementById('sticker-tabs');
-    const grid = document.getElementById('sticker-grid');
     const packNames = Object.keys(STICKERS);
-
     tabs.innerHTML = '';
     packNames.forEach((pack, i) => {
         const btn = document.createElement('button');
@@ -161,7 +236,6 @@ function buildStickerPicker() {
         };
         tabs.appendChild(btn);
     });
-
     renderStickerGrid(packNames[0]);
 }
 
@@ -173,6 +247,7 @@ function renderStickerGrid(pack) {
         img.src = url;
         img.className = 'sticker-item';
         img.loading = 'lazy';
+        img.onerror = () => { img.style.opacity = '0.3'; };
         img.onclick = (e) => {
             e.stopPropagation();
             sendSticker(url);
@@ -230,9 +305,9 @@ socket.on('update users', (users) => {
     users.forEach(u => {
         if (u.username !== myName) {
             const initials = u.username.slice(0, 2).toUpperCase();
-            list.innerHTML += `<li class="user-item ${currentTarget === u.socketId ? 'active' : ''}" onclick="switchChat('${u.socketId}', '${u.username}')">
-                <div class="user-avatar">${initials}</div>
-                <span>👤 ${u.username}</span>
+            list.innerHTML += `<li class="user-item ${currentTarget === u.socketId ? 'active' : ''}" onclick="switchChat('${escapeHtml(u.socketId)}', '${escapeHtml(u.username)}')">
+                <div class="user-avatar">${escapeHtml(initials)}</div>
+                <span>👤 ${escapeHtml(u.username)}</span>
             </li>`;
         }
     });
@@ -242,9 +317,12 @@ window.switchChat = (id, name) => {
     currentTarget = id;
     document.getElementById('target-name').innerText = name;
     messagesContainer.innerHTML = "";
-    if (id === 'lobby') socket.emit('join', myName);
+    // Clear typing indicator saat pindah chat
+    document.getElementById('typing-status').textContent = '';
+    // Hanya emit join sekali saat ganti ke lobby dari private
     body.classList.add('chat-open');
     document.getElementById('emoji-picker').classList.add('hidden');
+    document.getElementById('sticker-picker').classList.add('hidden');
 };
 
 document.getElementById('btn-back').onclick = () => body.classList.remove('chat-open');
@@ -303,6 +381,14 @@ document.getElementById('btn-send').onclick = send;
 messageInput.onkeypress = (e) => { if (e.key === 'Enter') send(); };
 
 fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Batas ukuran file 5MB
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran gambar maksimal 5MB');
+        fileInput.value = '';
+        return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
         socket.emit('send message', {
@@ -312,7 +398,7 @@ fileInput.onchange = (e) => {
             to: currentTarget
         });
     };
-    reader.readAsDataURL(e.target.files[0]);
+    reader.readAsDataURL(file);
     fileInput.value = '';
 };
 
@@ -323,6 +409,7 @@ socket.on('load history', (history) => {
     if (currentTarget === 'lobby') {
         messagesContainer.innerHTML = "";
         history.forEach(m => appendMsg(m));
+        scrollToBottom();
         history.forEach(m => {
             if (m.sender !== myName && !m.readBy?.includes(socket.id)) {
                 socket.emit('mark read', { msgId: m.id, fromSocketId: m.fromSocketId });
@@ -332,18 +419,16 @@ socket.on('load history', (history) => {
 });
 
 socket.on('receive message', (msg) => {
-    // Notif in-app (fallback kalau tab aktif)
-    if (msg.sender !== myName && document.visibilityState === 'hidden') {
-        // Push sudah ditangani server, skip Notification API supaya tidak dobel
-    }
+    const isLobbyMsg = !msg.isPrivate && currentTarget === 'lobby';
+    const isPrivateMsg = msg.isPrivate && (
+        msg.fromSocketId === currentTarget ||
+        msg.sender === myName ||
+        msg.to === socket.id
+    );
 
-    if (currentTarget === 'lobby' && !msg.isPrivate) {
+    if (isLobbyMsg || isPrivateMsg) {
         appendMsg(msg);
-        if (msg.sender !== myName) {
-            socket.emit('mark read', { msgId: msg.id, fromSocketId: msg.fromSocketId });
-        }
-    } else if (msg.isPrivate && (msg.fromSocketId === currentTarget || msg.sender === myName || msg.to === socket.id)) {
-        appendMsg(msg);
+        scrollToBottom();
         if (msg.sender !== myName) {
             socket.emit('mark read', { msgId: msg.id, fromSocketId: msg.fromSocketId });
         }
@@ -358,48 +443,9 @@ socket.on('message read', ({ msgId }) => {
     }
 });
 
-const STICKERS = {
-    '🐱 Kucing': [
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-face_1f431.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/crying-cat_1f63f.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/cat-with-tears-of-joy_1f639.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-cat-with-heart-eyes_1f63b.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/pouting-cat_1f63e.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/weary-cat_1f640.gif',
-    ],
-    '😂 Ngakak': [
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/rolling-on-the-floor-laughing_1f923.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/face-with-tears-of-joy_1f602.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-open-mouth_1f603.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/beaming-face-with-smiling-eyes_1f601.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/winking-face_1f609.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/squinting-face-with-tongue_1f61d.gif',
-    ],
-    '❤️ Cinta': [
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/red-heart_2764-fe0f.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/sparkling-heart_1f496.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/heart-with-arrow_1f498.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/growing-heart_1f497.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/revolving-hearts_1f49e.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/smiling-face-with-hearts_1f970.gif',
-    ],
-    '👋 Salam': [
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/waving-hand_1f44b.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/thumbs-up_1f44d.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/clapping-hands_1f44f.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/folded-hands_1f64f.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/flexed-biceps_1f4aa.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/ok-hand_1f44c.gif',
-    ],
-    '🔥 Hype': [
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/fire_1f525.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/party-popper_1f389.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/trophy_1f3c6.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/rocket_1f680.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/star-struck_1f929.gif',
-        'https://em-content.zobj.net/source/animated-noto-emoji/356/hundred-points_1f4af.gif',
-    ],
-};
+function scrollToBottom() {
+    messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
+}
 
 // =====================================================
 // LIGHTBOX
@@ -410,6 +456,7 @@ const lightboxImg = document.getElementById('lightbox-img');
 window.openLightbox = (src) => {
     lightboxImg.src = src;
     lightbox.classList.add('show');
+    history.pushState({ lightbox: true }, '');
 };
 
 document.getElementById('lightbox-close').onclick = () => {
@@ -431,7 +478,6 @@ document.getElementById('lightbox-download').onclick = () => {
     a.click();
 };
 
-// Tutup lightbox dengan tombol back HP
 window.addEventListener('popstate', () => {
     if (lightbox.classList.contains('show')) {
         lightbox.classList.remove('show');
@@ -448,38 +494,70 @@ function appendMsg(msg) {
     div.className = `message ${isMe ? 'me' : 'others'}`;
     div.setAttribute('data-id', msg.id);
 
-    const contentEscaped = msg.type === 'text' ? escapeHtml(msg.content) : '📷 Foto';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
 
-    let html = `<div class="bubble" onclick="setReply('${escapeHtml(msg.sender)}', '${contentEscaped}')">`;
-    html += `<small>${escapeHtml(msg.sender)}</small>`;
+    // Reply handler pakai data attribute, bukan inline onclick string (aman dari XSS)
+    bubble.addEventListener('click', () => {
+        const preview = msg.type === 'text' ? msg.content : msg.type === 'sticker' ? '🎭 Stiker' : '📷 Foto';
+        setReply(msg.sender, preview);
+    });
 
+    // Nama pengirim
+    const nameEl = document.createElement('small');
+    nameEl.textContent = msg.sender;
+    bubble.appendChild(nameEl);
+
+    // Reply quote
     if (msg.replyTo) {
-        html += `<div class="reply-quote"><strong>${escapeHtml(msg.replyTo.sender)}</strong>${escapeHtml(msg.replyTo.content)}</div>`;
+        const quote = document.createElement('div');
+        quote.className = 'reply-quote';
+        const quoteStrong = document.createElement('strong');
+        quoteStrong.textContent = msg.replyTo.sender;
+        const quoteText = document.createElement('span');
+        quoteText.textContent = msg.replyTo.content;
+        quote.appendChild(quoteStrong);
+        quote.appendChild(quoteText);
+        bubble.appendChild(quote);
     }
 
-    html += msg.type === 'text'
-        ? `<p>${escapeHtml(msg.content)}</p>`
-        : msg.type === 'sticker'
-        ? `<img src="${msg.content}" class="sticker-msg" onclick="event.stopPropagation();">`
-        : `<img src="${msg.content}" class="chat-img" onclick="event.stopPropagation(); openLightbox(this.src)">`;
+    // Konten pesan
+    if (msg.type === 'text') {
+        const p = document.createElement('p');
+        p.textContent = msg.content;
+        bubble.appendChild(p);
+    } else if (msg.type === 'sticker') {
+        const img = document.createElement('img');
+        img.src = msg.content;
+        img.className = 'sticker-msg';
+        img.addEventListener('click', e => e.stopPropagation());
+        bubble.appendChild(img);
+    } else if (msg.type === 'image') {
+        const img = document.createElement('img');
+        img.src = msg.content;
+        img.className = 'chat-img';
+        img.addEventListener('click', e => { e.stopPropagation(); openLightbox(img.src); });
+        bubble.appendChild(img);
+    }
+
+    // Baris bawah: waktu + read receipt
+    const metaRow = document.createElement('div');
+    metaRow.className = 'msg-meta';
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'msg-time';
+    timeEl.textContent = formatTime(msg.timestamp);
+    metaRow.appendChild(timeEl);
 
     if (isMe) {
         const isRead = msg.readBy && msg.readBy.length > 1;
-        html += `<span class="read-receipt ${isRead ? 'read' : ''}">${isRead ? '✓✓' : '✓'}</span>`;
+        const receipt = document.createElement('span');
+        receipt.className = 'read-receipt' + (isRead ? ' read' : '');
+        receipt.textContent = isRead ? '✓✓' : '✓';
+        metaRow.appendChild(receipt);
     }
 
-    html += `</div>`;
-    div.innerHTML = html;
+    bubble.appendChild(metaRow);
+    div.appendChild(bubble);
     messagesContainer.appendChild(div);
-    messagesWrapper.scrollTop = messagesWrapper.scrollHeight;
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
